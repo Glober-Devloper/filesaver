@@ -1,4 +1,4 @@
-# filecloudsupabaseX.py - FULLY FIXED VERSION WITH BUTTON ISSUES RESOLVED
+# filecloudsupabaseX.py - FULLY FIXED VERSION WITH ALL BUTTON ISSUES RESOLVED
 import asyncio
 import os
 import uuid
@@ -455,58 +455,58 @@ class FileStoreBot:
         )
 
     async def groups_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /groups command and 'My Groups' button with dynamic response."""
-    message_to_send = update.message if update.message else update.callback_query.message
-    user_id = update.effective_user.id
+        """Handle /groups command and 'My Groups' button with dynamic response."""
+        message_to_send = update.message if update.message else update.callback_query.message
+        user_id = update.effective_user.id
 
-    if not is_user_authorized(user_id):
-        await message_to_send.reply_text(f"Unauthorized. Contact admin: {ADMIN_CONTACT} 🚫")
-        return
+        if not is_user_authorized(user_id):
+            await message_to_send.reply_text(f"Unauthorized. Contact admin: {ADMIN_CONTACT} 🚫")
+            return
 
-    try:
-        conn = psycopg2.connect(SUPABASE_URL)
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT id, name, total_files, total_size, created_at
-            FROM groups WHERE owner_id = %s
-            ORDER BY created_at DESC LIMIT 20
-        """, (user_id,))
-        groups = cursor.fetchall()
-        conn.close()
+        try:
+            conn = psycopg2.connect(SUPABASE_URL)
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, name, total_files, total_size, created_at
+                FROM groups WHERE owner_id = %s
+                ORDER BY created_at DESC LIMIT 20
+            """, (user_id,))
+            groups = cursor.fetchall()
+            conn.close()
 
-        text = ""
-        keyboard = []
+            text = ""
+            keyboard = []
 
-        if not groups:
-            text = "No Groups Found 📂\n\n" \
-                   "You haven't created any groups yet.\n" \
-                   "Upload your first file to get started! ⬆️"
-            keyboard = [[InlineKeyboardButton("Upload First File ⬆️", callback_data="cmd_upload")]]
-        else:
-            text = "Your File Groups 📂\n\n"
-            for i, (group_id, name, files, size, created) in enumerate(groups):
-                text += f"{i+1}. {name}\n"
-                text += f"   {files} files, {format_size(size)}\n"
-                text += f"   {created[:10]}\n\n"
+            if not groups:
+                text = "No Groups Found 📂\n\n" \
+                       "You haven't created any groups yet.\n" \
+                       "Upload your first file to get started! ⬆️"
+                keyboard = [[InlineKeyboardButton("Upload First File ⬆️", callback_data="cmd_upload")]]
+            else:
+                text = "Your File Groups 📂\n\n"
+                for i, (group_id, name, files, size, created) in enumerate(groups):
+                    text += f"{i+1}. {name}\n"
+                    text += f"   {files} files, {format_size(size)}\n"
+                    text += f"   {created[:10]}\n\n"
 
-                keyboard.append([
-                    InlineKeyboardButton(f"View {name[:15]} ℹ️", callback_data=f"view_group_id_{group_id}"),
-                    InlineKeyboardButton("Get Link 🔗", callback_data=f"link_group_id_{group_id}")
-                ])
+                    keyboard.append([
+                        InlineKeyboardButton(f"View {name[:15]} ℹ️", callback_data=f"view_group_id_{group_id}"),
+                        InlineKeyboardButton("Get Link 🔗", callback_data=f"link_group_id_{group_id}")
+                    ])
 
-        keyboard.append([InlineKeyboardButton("Main Menu 🏠", callback_data="main_menu")])
+            keyboard.append([InlineKeyboardButton("Main Menu 🏠", callback_data="main_menu")])
 
-        if update.callback_query:
-            await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
-        else:
-            await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+            if update.callback_query:
+                await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+            else:
+                await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
 
-    except Exception as e:
-        logger.error(f"Groups handler error: {e}")
-        if update.callback_query:
-            await update.callback_query.edit_message_text("Error loading groups. Please try again. 😔")
-        else:
-            await update.message.reply_text("Error loading groups. Please try again. 😔")
+        except Exception as e:
+            logger.error(f"Groups handler error: {e}")
+            if update.callback_query:
+                await update.callback_query.edit_message_text("Error loading groups. Please try again. 😔")
+            else:
+                await update.message.reply_text("Error loading groups. Please try again. 😔")
 
     async def help_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /help command"""
