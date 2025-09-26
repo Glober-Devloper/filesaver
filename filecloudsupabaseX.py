@@ -1,5 +1,4 @@
-
-# filestore_supabase.py - MODIFIED FOR SUPABASE TO PREVENT DATA LOSS ON REDEPLOY
+# filecloudsupabaseX.py - FULLY FIXED VERSION WITH BUTTON ISSUES RESOLVED
 import asyncio
 import os
 import uuid
@@ -272,7 +271,6 @@ def get_caption_setting() -> tuple:
         conn.close()
 
         caption_enabled = True
-        # Referencing the global CUSTOM_CAPTION here
         custom_caption = CUSTOM_CAPTION
 
         for key, value in settings:
@@ -283,13 +281,11 @@ def get_caption_setting() -> tuple:
 
         return caption_enabled, custom_caption
     except Exception:
-        # Fallback in case of any database error, use the global default
         return True, CUSTOM_CAPTION
 
 def get_file_caption(file_name: str, serial_number: int = None, user_id: int = None) -> str:
     """Generate file caption with user-specific settings"""
     try:
-        # Check if user has caption disabled
         if user_id and not is_admin(user_id):
             conn = psycopg2.connect(SUPABASE_URL)
             cursor = conn.cursor()
@@ -302,7 +298,6 @@ def get_file_caption(file_name: str, serial_number: int = None, user_id: int = N
             if user_caption_disabled and user_caption_disabled[0]:
                 return file_name
 
-        # Get global caption settings
         caption_enabled, custom_caption = get_caption_setting()
 
         if not caption_enabled:
@@ -484,7 +479,7 @@ class FileStoreBot:
 
             if not groups:
                 text = "No Groups Found 📂\n\n" \
-                       "You haven't created any groups yet.\n" \
+                       "You haven't created any groups yet.\n"
                        "Upload your first file to get started! ⬆️"
                 keyboard = [[InlineKeyboardButton("Upload First File ⬆️", callback_data="cmd_upload")]]
             else:
@@ -771,7 +766,7 @@ Contact Admin: {ADMIN_CONTACT} 👨‍💻"""
 
             conn.close()
 
-            share_link = f"https://t.me/{BOT_USERNAME}?start={link_code}"
+            share_link = f"https://t.me/{BOT_USERNAME.replace('@', '')}?start={link_code}"
             keyboard = [
                 [InlineKeyboardButton("Share File 🔗", url=share_link)],
                 [InlineKeyboardButton("Main Menu 🏠", callback_data="main_menu")]
@@ -958,7 +953,7 @@ Contact Admin: {ADMIN_CONTACT} 👨‍💻"""
 
             conn.close()
 
-            share_link = f"https://t.me/{BOT_USERNAME}?start={link_code}"
+            share_link = f"https://t.me/{BOT_USERNAME.replace('@', '')}?start={link_code}"
             keyboard = [
                 [InlineKeyboardButton("Share Group 🔗", url=share_link)],
                 [InlineKeyboardButton("Main Menu 🏠", callback_data="main_menu")]
@@ -1223,7 +1218,7 @@ Contact Admin: {ADMIN_CONTACT} 👨‍💻"""
 
             elif data == "help_adduser":
                 await query.edit_message_text(
-                    "Add User Help ➕\n\nTo add a new user, use:\n/adduser <user_id> [username>\n\nExample:\n/adduser 123456789 john",
+                    "Add User Help ➕\n\nTo add a new user, use:\n/adduser <user_id> [username]\n\nExample:\n/adduser 123456789 john",
                     reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("User Management 👥", callback_data="user_management")]])
                 )
 
@@ -1448,7 +1443,7 @@ Choose an option below to get started! 👇"""
                 pass
 
             # Success message with working link
-            share_link = f"https://t.me/{BOT_USERNAME}?start={link_code}"
+            share_link = f"https://t.me/{BOT_USERNAME.replace('@', '')}?start={link_code}"
             keyboard = [
                 [InlineKeyboardButton("Share Link 🔗", url=share_link)],
                 [InlineKeyboardButton("Upload Another ⬆️", callback_data="cmd_upload")],
@@ -1509,11 +1504,18 @@ Choose an option below to get started! 👇"""
             session['files'].append(file_name)
 
             # Update user with progress
+            keyboard = [
+                [
+                    InlineKeyboardButton("Finish Upload ✅", callback_data="finish_bulk"),
+                    InlineKeyboardButton("Cancel Bulk ❌", callback_data="cancel_bulk")
+                ]
+            ]
             await update.message.reply_text(
                 f"File Added to Bulk: {file_name} ✅\n"
                 f"Serial: #{serial_number:03d}\n"
                 f"Total in session: {len(session['files'])}\n\n"
-                "Send more files or click Finish Upload."
+                "Send more files or click Finish Upload.",
+                reply_markup=InlineKeyboardMarkup(keyboard)
             )
 
             # Delay to avoid flooding
@@ -1544,10 +1546,19 @@ Choose an option below to get started! 👇"""
         if total_files > 10:
             text += f"\n...and {total_files - 10} more."
 
-        keyboard = [
-            [InlineKeyboardButton("View Group ℹ️", callback_data=f"view_group_name_{group_name}")],  # Assuming you have this callback
-            [InlineKeyboardButton("Main Menu 🏠", callback_data="main_menu")]
-        ]
+        # Get group_id for callback
+        conn = psycopg2.connect(SUPABASE_URL)
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM groups WHERE name = %s AND owner_id = %s", (group_name, user_id))
+        group_info = cursor.fetchone()
+        conn.close()
+
+        group_id = group_info[0] if group_info else None
+
+        keyboard = []
+        if group_id:
+            keyboard.append([InlineKeyboardButton("View Group ℹ️", callback_data=f"view_group_id_{group_id}")])
+        keyboard.append([InlineKeyboardButton("Main Menu 🏠", callback_data="main_menu")])
 
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
 
@@ -1722,7 +1733,7 @@ Settings:
             conn = psycopg2.connect(SUPABASE_URL)
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT user_id, first_name, username, is_active, caption_disabled, added_at
+                SELECT user_id, username, first_name, is_active, caption_disabled, added_at
                 FROM authorized_users
                 WHERE user_id NOT IN (%s, %s)
                 ORDER BY added_at DESC
@@ -1803,7 +1814,7 @@ Settings:
                 
                 text += f"{link_type.title()}: {name[:20]}{'...' if len(name or '') > 20 else ''}\n"
                 text += f"Clicks: {clicks} | Created: {created_at[:10]}\n"
-                text += f"Link: https://t.me/{BOT_USERNAME}?start={link_code}\n"
+                text += f"Link: https://t.me/{BOT_USERNAME.replace('@', '')}?start={link_code}\n\n"
                 # Add a revoke button for each link in this view with the correct callback_data
                 keyboard.append([InlineKeyboardButton(f"Revoke {name[:15]} 🚫", callback_data=f"{callback_prefix}_{link_code}")])
 
@@ -2327,7 +2338,7 @@ Added At: {added_at[:16]}""" # Slice for cleaner timestamp
                 chunks = [text[i:i + 4000] for i in range(0, len(text), 4000)]
                 for i, chunk in enumerate(chunks):
                     if i == 0:
-                        await query.edit_message_text(chunk, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("User Management 👥", callback_data="user_management")]]))
+                        await query.edit_message_text(chunk, reply_markup=InlineKeyboardMarkup(keyboard))
                     else:
                         await query.message.reply_text(chunk)
             else:
@@ -2399,7 +2410,7 @@ Files in this group (first 10):"""
             keyboard = [
                 [InlineKeyboardButton("List All Files 📜", callback_data=f"list_files_group_{group_id}")],
                 [InlineKeyboardButton("Add More Files ➕", callback_data=f"add_files_to_group_{group_id}")],
-                [InlineKeyboardButton("Get Group Link 🔗", callback_data=f"gen_group_link_{group_id}")],
+                [InlineKeyboardButton("Get Group Link 🔗", callback_data=f"link_group_id_{group_id}")],
                 [InlineKeyboardButton("Delete Group 💥", callback_data=f"delete_group_id_{group_id}")],
             ]
 
@@ -2459,7 +2470,7 @@ Files in this group (first 10):"""
 
             conn.close()
 
-            share_link = f"https://t.me/{BOT_USERNAME}?start={link_code}"
+            share_link = f"https://t.me/{BOT_USERNAME.replace('@', '')}?start={link_code}"
             keyboard = [
                 [InlineKeyboardButton("Share Group 🔗", url=share_link)],
                 [InlineKeyboardButton("View Group Details ℹ️", callback_data=f"view_group_id_{group_id}")],
@@ -2578,10 +2589,12 @@ Files in this group (first 10):"""
 
             file_link_text = "N/A"
             share_button = []
+            revoke_button = []
             if file_link_row:
                 link_code = file_link_row[0]
-                file_link_text = f"https://t.me/{BOT_USERNAME}?start={link_code}"
+                file_link_text = f"https://t.me/{BOT_USERNAME.replace('@', '')}?start={link_code}"
                 share_button.append(InlineKeyboardButton("Share File Link 🔗", url=file_link_text))
+                revoke_button.append(InlineKeyboardButton("Revoke File Link 🚫", callback_data=f"revoke_file_link_{link_code}"))
             else:
                 # If no link exists, create one
                 link_code = generate_id()
@@ -2590,8 +2603,9 @@ Files in this group (first 10):"""
                     VALUES (%s, 'file', %s, %s, 1)
                 """, (link_code, file_id, user_id))
                 conn.commit() # Commit the new link creation
-                file_link_text = f"https://t.me/{BOT_USERNAME}?start={link_code}"
+                file_link_text = f"https://t.me/{BOT_USERNAME.replace('@', '')}?start={link_code}"
                 share_button.append(InlineKeyboardButton("Share File Link 🔗", url=file_link_text))
+                revoke_button.append(InlineKeyboardButton("Revoke File Link 🚫", callback_data=f"revoke_file_link_{link_code}"))
 
             conn.close() # Close connection after all DB operations
 
@@ -2607,6 +2621,7 @@ File Link: {file_link_text}"""
 
             keyboard = [
                 share_button, # This will be empty if no link, so safe
+                revoke_button,  # Added revoke button for file links
                 [InlineKeyboardButton("Delete File 🗑️", callback_data=f"delete_file_{file_id}")],
                 [InlineKeyboardButton("Back to Group Files 📜", callback_data=f"list_files_group_{group_id}")],
                 [InlineKeyboardButton("Main Menu 🏠", callback_data="main_menu")]
@@ -2639,7 +2654,7 @@ File Link: {file_link_text}"""
             if file_info:
                 file_name, group_name, group_id = file_info
                 await query.edit_message_text(
-                    f"Are you sure you want to delete '{file_name}' (File #{file_id_to_delete}) from group '{group_name}'? 🗑️\n" # Added file_id_to_delete for clarity
+                    f"Are you sure you want to delete '{file_name}' from group '{group_name}'? 🗑️\n"
                     "This action cannot be undone. ⚠️",
                     reply_markup=InlineKeyboardMarkup([
                         [InlineKeyboardButton("Yes, Delete File ✅", callback_data=f"confirm_delete_file_{file_id_to_delete}")],
@@ -2945,7 +2960,7 @@ def main():
         application.add_handler(CallbackQueryHandler(bot.callback_handler))
 
         logger.info("Complete Enhanced FileStore Bot started successfully!")
-        logger.info(f"Bot Username: @{BOT_USERNAME}")
+        logger.info(f"Bot Username: {BOT_USERNAME}")
         logger.info(f"Storage Channel: {STORAGE_CHANNEL_ID}")
         logger.info(f"Admin IDs: {', '.join(map(str, ADMIN_IDS))}")
         logger.info(f"Admin Contact: {ADMIN_CONTACT}")
