@@ -485,9 +485,10 @@ class FileStoreBot:
             else:
                 text = "Your File Groups 📂\n\n"
                 for i, (group_id, name, files, size, created) in enumerate(groups):
+                    created_str = created.strftime("%Y-%m-%d") if created else "N/A"  # Format datetime to string
                     text += f"{i+1}. {name}\n"
                     text += f"   {files} files, {format_size(size)}\n"
-                    text += f"   {created[:10]}\n\n"
+                    text += f"   {created_str}\n\n"
 
                     keyboard.append([
                         InlineKeyboardButton(f"View {name[:15]} ℹ️", callback_data=f"view_group_id_{group_id}"),
@@ -678,12 +679,14 @@ Contact Admin: {ADMIN_CONTACT} 👨‍💻"""
                 status = "Active ✅" if is_active else "Inactive ❌"
                 caption_status = "No Caption 🚫" if caption_disabled else "With Caption ✅"
 
+                added_at_str = added_at.strftime("%Y-%m-%d") if added_at else "N/A"  # Format datetime to string
+
                 text += f"{first_name or 'Unknown'}\n"
                 text += f"ID: {user_id}\n"
                 text += f"@{username or 'None'}\n"
                 text += f"Status: {status}\n"
                 text += f"Caption: {caption_status}\n"
-                text += f"Added: {added_at[:10]}\n\n"
+                text += f"Added: {added_at_str}\n\n"
 
             # Split message if too long
             if len(text) > 4000:
@@ -1045,7 +1048,7 @@ Contact Admin: {ADMIN_CONTACT} 👨‍💻"""
                 await self._update_custom_caption(update, new_caption)
                 return
             else:
-                await update.message.reply_text("Please send the new caption text. To cancel, use /start. ✍️")
+                await update.message.reply_text("Please send the new custom caption text. To cancel, use /start. ✍️")
                 return
 
         if not is_user_authorized(user_id):
@@ -1735,6 +1738,78 @@ Settings:
             logger.error(f"Detailed stats error: {e}")
             await message.reply_text("Error loading statistics 😔")
 
+    async def _show_bot_stats_callback(self, query):
+        """Show bot stats via callback."""
+        try:
+            conn = psycopg2.connect(SUPABASE_URL)
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM authorized_users")
+            total_users = cursor.fetchone()[0]
+
+            cursor.execute("SELECT COUNT(*) FROM groups")
+            total_groups = cursor.fetchone()[0]
+
+            cursor.execute("SELECT COUNT(*) FROM files")
+            total_files = cursor.fetchone()[0]
+
+            cursor.execute("SELECT SUM(file_size) FROM files")
+            total_size = cursor.fetchone()[0] or 0
+
+            cursor.execute("SELECT COUNT(*) FROM file_links WHERE is_active = 1")
+            active_links = cursor.fetchone()[0]
+
+            cursor.execute("SELECT value FROM bot_settings WHERE key = 'caption_enabled'")
+            caption_enabled = cursor.fetchone()[0] == '1'
+
+            conn.close()
+
+            text = f"""Bot Statistics 📊
+
+Users: {total_users} 👥
+Groups: {total_groups} 📂
+Files: {total_files} 📄
+Total Size: {format_size(total_size)}
+
+Links:
+- Active: {active_links} 🔗
+
+Settings:
+- Caption: {"On ✅" if caption_enabled else "Off ❌"}
+- File Limit: {format_size(MAX_FILE_SIZE)}
+- Contact: {ADMIN_CONTACT} 📞"""
+
+            keyboard = [
+                [
+                    InlineKeyboardButton("Refresh 🔄", callback_data="bot_stats"),
+                    InlineKeyboardButton("Export Data 📤", callback_data="export_stats")
+                ],
+                [
+                    InlineKeyboardButton("Admin Panel ⚙️", callback_data="admin_panel"),
+                    InlineKeyboardButton("Main Menu 🏠", callback_data="main_menu")
+                ]
+            ]
+
+            await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+
+        except Exception as e:
+            logger.error(f"Bot stats callback error: {e}")
+            await query.edit_message_text("Error loading bot stats. Please try again. 😔")
+
+    async def _show_full_stats_callback(self, query):
+        """Show full stats via callback."""
+        # Placeholder implementation - customize as needed
+        await query.edit_message_text("Full stats not implemented yet. 😔")
+
+    async def _export_stats_callback(self, query):
+        """Export stats via callback."""
+        # Placeholder implementation - customize as needed
+        await query.edit_message_text("Export stats not implemented yet. 😔")
+
+    async def _show_usage_report_callback(self, query):
+        """Show usage report via callback."""
+        # Placeholder implementation - customize as needed
+        await query.edit_message_text("Usage report not implemented yet. 😔")
+
     # ================= COMPLETE USER MANAGEMENT METHODS =================
 
     async def _show_user_management_callback(self, query):
@@ -1761,9 +1836,11 @@ Settings:
                     status = "Active ✅" if is_active else "Inactive ❌"
                     caption_status = "No Caption 🚫" if caption_disabled else "With Caption ✅"
 
+                    added_at_str = added_at.strftime("%Y-%m-%d") if added_at else "N/A"  # Format datetime to string
+
                     text += f"{first_name or 'Unknown'} (ID: {user_id})\n" \
                             f"@{username or 'None'} | Status: {status} | Caption: {caption_status}\n" \
-                            f"Added: {added_at[:10]}\n\n"
+                            f"Added: {added_at_str}\n\n"
 
                     keyboard.append([
                         InlineKeyboardButton(f"{first_name or str(user_id)[:8]} ℹ️", callback_data=f"user_info_{user_id}"),
@@ -1822,8 +1899,10 @@ Settings:
                 # Determine the correct callback prefix based on link_type
                 callback_prefix = "revoke_file_link" if link_type == "file" else "revoke_group_link"
                 
+                created_at_str = created_at.strftime("%Y-%m-%d") if created_at else "N/A"  # Format datetime to string
+
                 text += f"{link_type.title()}: {name[:20]}{'...' if len(name or '') > 20 else ''}\n"
-                text += f"Clicks: {clicks} | Created: {created_at[:10]}\n"
+                text += f"Clicks: {clicks} | Created: {created_at_str}\n"
                 text += f"Link: https://t.me/{BOT_USERNAME.replace('@', '')}?start={link_code}\n\n"
                 # Add a revoke button for each link in this view with the correct callback_data
                 keyboard.append([InlineKeyboardButton(f"Revoke {name[:15]} 🚫", callback_data=f"{callback_prefix}_{link_code}")])
@@ -2221,6 +2300,8 @@ No configurable options here yet.
             if user_info:
                 u_id, username, first_name, added_by, added_at, is_active, caption_disabled = user_info
 
+                added_at_str = added_at.strftime("%Y-%m-%d %H:%M") if added_at else "N/A"  # Format datetime to string
+
                 # Fetch added_by_admin_name
                 added_by_admin_name = "Unknown Admin"
                 if added_by:
@@ -2239,7 +2320,7 @@ Username: @{username or 'N/A'}
 Status: {'Active ✅' if is_active else 'Inactive ❌'}
 Caption Enabled: {'Yes ✅' if not caption_disabled else 'No ❌'}
 Added By: {added_by_admin_name} 👨‍💻
-Added At: {added_at[:16]}""" # Slice for cleaner timestamp
+Added At: {added_at_str}""" # Slice for cleaner timestamp
 
                 keyboard = [
                     [InlineKeyboardButton("Toggle Caption ✍️", callback_data=f"toggle_user_caption_{user_id}")],
@@ -2338,9 +2419,12 @@ Added At: {added_at[:16]}""" # Slice for cleaner timestamp
             for user_id, username, first_name, added_at, is_active, caption_disabled in users:
                 status = "Active ✅" if is_active else "Inactive ❌"
                 caption_status = "No Caption 🚫" if caption_disabled else "With Caption ✅"
+
+                added_at_str = added_at.strftime("%Y-%m-%d") if added_at else "N/A"  # Format datetime to string
+
                 text += (f"{first_name or 'Unknown'} (ID: {user_id})\n"
                          f"@{username or 'None'} | Status: {status} | Caption: {caption_status}\n"
-                         f"Added: {added_at[:10]}\n\n")
+                         f"Added: {added_at_str}\n\n")
 
             # Telegram message limit is 4096 characters for text messages.
             # Split and send if too long.
@@ -2382,10 +2466,12 @@ Added At: {added_at[:16]}""" # Slice for cleaner timestamp
 
             name, total_files, total_size, created_at = group_info
 
+            created_at_str = created_at.strftime("%Y-%m-%d") if created_at else "N/A"  # Format datetime to string
+
             text = f"""Group Details: {name} ℹ️
 Total Files: {total_files} 📄
 Total Size: {format_size(total_size)}
-Created On: {created_at[:10]} 🗓️
+Created On: {created_at_str} 🗓️
 
 Files in this group (first 10):"""
 
@@ -2591,6 +2677,8 @@ Files in this group (first 10):"""
 
             file_name, file_type, file_size, uploaded_at, serial_number, group_name, telegram_file_id, group_id = file_info
 
+            uploaded_at_str = uploaded_at.strftime("%Y-%m-%d %H:%M") if uploaded_at else "N/A"  # Format datetime to string
+
             # Get or create file specific link
             cursor.execute("""
                 SELECT link_code FROM file_links WHERE file_id = %s AND link_type = 'file' AND owner_id = %s AND is_active = 1
@@ -2625,7 +2713,7 @@ Group: {group_name} 📁
 Serial No: #{serial_number:03d}
 Type: {file_type.capitalize()}
 Size: {format_size(file_size)}
-Uploaded: {uploaded_at[:16]} 🗓️
+Uploaded: {uploaded_at_str} 🗓️
 
 File Link: {file_link_text}"""
 
