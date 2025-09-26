@@ -112,25 +112,27 @@ def init_database():
         conn = psycopg2.connect(SUPABASE_URL)
         cursor = conn.cursor()
 
-        # Create tables if not exists (adjusted for PostgreSQL)
+        # Create tables if not exists (adjusted for PostgreSQL with BIGINT where needed)
+        logger.info("Creating authorized_users table...")
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS authorized_users (
                 id SERIAL PRIMARY KEY,
-                user_id INTEGER UNIQUE NOT NULL,
+                user_id BIGINT UNIQUE NOT NULL,
                 username TEXT,
                 first_name TEXT,
-                added_by INTEGER NOT NULL,
+                added_by BIGINT NOT NULL,
                 added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 is_active INTEGER DEFAULT 1,
                 caption_disabled INTEGER DEFAULT 0
             )
         """)
 
+        logger.info("Creating groups table...")
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS groups (
                 id SERIAL PRIMARY KEY,
                 name TEXT NOT NULL,
-                owner_id INTEGER NOT NULL,
+                owner_id BIGINT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 total_files INTEGER DEFAULT 0,
                 total_size BIGINT DEFAULT 0,
@@ -138,17 +140,18 @@ def init_database():
             )
         """)
 
+        logger.info("Creating files table...")
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS files (
                 id SERIAL PRIMARY KEY,
-                group_id INTEGER NOT NULL,
+                group_id BIGINT NOT NULL,
                 serial_number INTEGER NOT NULL,
                 unique_id TEXT UNIQUE NOT NULL,
                 file_name TEXT,
                 file_type TEXT NOT NULL,
                 file_size BIGINT DEFAULT 0,
                 telegram_file_id TEXT NOT NULL,
-                uploader_id INTEGER NOT NULL,
+                uploader_id BIGINT NOT NULL,
                 uploader_username TEXT,
                 uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 storage_message_id BIGINT,
@@ -157,14 +160,15 @@ def init_database():
             )
         """)
 
+        logger.info("Creating file_links table...")
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS file_links (
                 id SERIAL PRIMARY KEY,
                 link_code TEXT UNIQUE NOT NULL,
-                file_id INTEGER,
-                group_id INTEGER,
+                file_id BIGINT,
+                group_id BIGINT,
                 link_type TEXT NOT NULL CHECK (link_type IN ('file', 'group')),
-                owner_id INTEGER NOT NULL,
+                owner_id BIGINT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 clicks BIGINT DEFAULT 0,
                 is_active INTEGER DEFAULT 1,
@@ -173,6 +177,7 @@ def init_database():
             )
         """)
 
+        logger.info("Creating bot_settings table...")
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS bot_settings (
                 key TEXT PRIMARY KEY,
@@ -182,19 +187,29 @@ def init_database():
         """)
 
         # Insert default settings with ON CONFLICT
+        logger.info("Inserting default bot settings...")
         cursor.execute("INSERT INTO bot_settings (key, value) VALUES (%s, %s) ON CONFLICT (key) DO NOTHING", ('caption_enabled', '1'))
         cursor.execute("INSERT INTO bot_settings (key, value) VALUES (%s, %s) ON CONFLICT (key) DO NOTHING", ('custom_caption', CUSTOM_CAPTION))
 
         # Add admins to authorized users
-        for admin_id in ADMIN_IDS:
-            cursor.execute("""
-                INSERT INTO authorized_users (user_id, username, first_name, added_by, is_active)
-                VALUES (%s, %s, %s, %s, 1) ON CONFLICT (user_id) DO NOTHING
-            """, (admin_id, f'admin_{admin_id}', f'Admin {admin_id}', admin_id))
+        logger.info(f"Processing ADMIN_IDS: {ADMIN_IDS}")
+        if ADMIN_IDS:
+            for admin_id in ADMIN_IDS:
+                try:
+                    admin_id_int = int(admin_id)  # Ensure it's an integer
+                    logger.info(f"Inserting admin ID: {admin_id_int}")
+                    cursor.execute("""
+                        INSERT INTO authorized_users (user_id, username, first_name, added_by, is_active)
+                        VALUES (%s, %s, %s, %s, 1) ON CONFLICT (user_id) DO NOTHING
+                    """, (admin_id_int, f'admin_{admin_id_int}', f'Admin {admin_id_int}', admin_id_int))
+                except ValueError as ve:
+                    logger.error(f"Invalid admin ID {admin_id}: {ve}")
+                except Exception as e:
+                    logger.error(f"Error inserting admin ID {admin_id}: {e}")
 
         conn.commit()
-        conn.close()
         logger.info("Database initialized successfully")
+        conn.close()
 
     except Exception as e:
         logger.error(f"Database initialization error: {e}")
