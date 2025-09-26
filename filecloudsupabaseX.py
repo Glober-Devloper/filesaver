@@ -1314,9 +1314,11 @@ Contact Admin: {ADMIN_CONTACT} 👨‍💻"""
             ],
             [
                 InlineKeyboardButton("Help 📚", callback_data="cmd_help"),
-                InlineKeyboardButton("Clear Console ✨", callback_data="clear_console")
+                InlineKeyboardButton("Clear Console ✨", callback_data="clear_console") if is_admin(user.id) else None
             ]
         ])
+
+        keyboard = [row for row in keyboard if row]  # Remove None rows
 
         _, custom_caption = get_caption_setting()
         role = "Admin 👑" if is_admin(user.id) else "User"
@@ -1377,9 +1379,11 @@ Choose an option below to get started! 👇"""
             ],
             [
                 InlineKeyboardButton("Help 📚", callback_data="cmd_help"),
-                InlineKeyboardButton("Clear Console ✨", callback_data="clear_console")
+                InlineKeyboardButton("Clear Console ✨", callback_data="clear_console") if is_admin(user_id) else None
             ]
         ])
+
+        keyboard = [row for row in keyboard if row]  # Remove None rows
 
         role = "Admin 👑" if is_admin(user_id) else "User"
 
@@ -1396,8 +1400,12 @@ Choose an option below to get started! 👇"""
             user_id = update.effective_user.id # Fixed: Get user_id here directly
             group_name = context.user_data['group_name']
 
-            # Show processing message
-            processing_msg = await update.message.reply_text("Processing file upload... ⏳")
+            # Show progress message
+            try:
+                processing_msg = await update.message.reply_text("Processing file upload... ⏳")
+            except Exception as e:
+                logger.error(f"Error sending progress message: {e}")
+                processing_msg = None
 
             # Save to database
             file_id, serial_number = await self._save_file_to_db(
@@ -1422,7 +1430,8 @@ Choose an option below to get started! 👇"""
 
             except Exception as e:
                 logger.error(f"Storage upload error: {e}")
-                await processing_msg.edit_text("Error uploading to storage channel. Please check channel permissions. ❌")
+                if processing_msg:
+                    await processing_msg.edit_text("Error uploading to storage channel. Please check channel permissions. ❌")
                 return
 
             # Generate share link
@@ -1437,10 +1446,11 @@ Choose an option below to get started! 👇"""
             conn.close()
 
             # Delete processing message
-            try:
-                await processing_msg.delete()
-            except Exception:
-                pass
+            if processing_msg:
+                try:
+                    await processing_msg.delete()
+                except Exception:
+                    pass
 
             # Success message with working link
             share_link = f"https://t.me/{BOT_USERNAME.replace('@', '')}?start={link_code}"
