@@ -1,2 +1,2 @@
-python-telegram-bot==21.5 
+python-telegram-bot[job-queue]==21.5 
 psycopg2-binary==2.9.9
